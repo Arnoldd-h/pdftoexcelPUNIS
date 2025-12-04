@@ -1033,7 +1033,15 @@ class APUConverter:
         
         # === AGREGAR VALIDACIÓN DE DATOS PARA COLUMNA J (NP/EP/ND) ===
         # Crear la validación de datos con la lista de opciones
-        dv = DataValidation(type="list", formula1='"NP,EP,ND"', allow_blank=False)
+        # showDropDown debe estar en False (no mostrar dropdown) pero la validación sigue activa
+        dv = DataValidation(
+            type="list",
+            formula1='"NP,EP,ND"',
+            allow_blank=False,
+            showDropDown=False,  # No mostrar el dropdown pero validar
+            showInputMessage=False,
+            showErrorMessage=False
+        )
         dv.error = 'El valor debe ser NP, EP o ND'
         dv.errorTitle = 'Entrada inválida'
         dv.prompt = 'Seleccione NP, EP o ND'
@@ -1101,27 +1109,47 @@ def convert_to_shared_strings(input_path, output_path=None):
             content = f.read()
         
         # Recopilar todos los inline strings EN ORDEN DE APARICIÓN
+        # EXCEPCIÓN: No convertir "NP", "EP", "ND" ya que PUNIS necesita que permanezcan inline
         shared_strings = []
         string_map = {}  # mapa de string -> índice
+        vae_values = {'NP', 'EP', 'ND'}  # Valores que NO se convierten
         
         # Buscar todos los inline strings EN ORDEN
-        pattern = r't="inlineStr"[^>]*><is><t>([^<]*)</t></is>'
+        pattern = r'<c r="([^"]*)"[^>]*t="inlineStr"[^>]*><is><t>([^<]*)</t></is></c>'
         
         # Primera pasada: recopilar strings en orden de primera aparición
         for match in re.finditer(pattern, content):
-            text = match.group(1)
+            cell_ref = match.group(1)
+            text = match.group(2)
+            
+            # NO convertir valores NP/EP/ND - deben permanecer inline
+            if text in vae_values:
+                continue
+                
             if text not in string_map:
                 string_map[text] = len(shared_strings)
                 shared_strings.append(text)
         
-        print(f"  Encontrados {len(shared_strings)} strings únicos")
+        print(f"  Encontrados {len(shared_strings)} strings únicos (excluyendo NP/EP/ND)")
         
         # Reemplazar inline strings con referencias a shared strings
-        # IMPORTANTE: Cada ocurrencia del mismo texto debe tener el mismo índice
+        # IMPORTANTE: NP/EP/ND permanecen como inline strings
         def replace_inline(match):
-            text = match.group(1)
-            idx = string_map[text]
-            return f't="s"><v>{idx}</v>'
+            full_match = match.group(0)
+            cell_ref = match.group(1)
+            text = match.group(2)
+            
+            # Si es un valor VAE (NP/EP/ND), mantener inline
+            if text in vae_values:
+                return full_match
+            
+            # Para otros valores, convertir a shared string
+            if text in string_map:
+                idx = string_map[text]
+                return f'<c r="{cell_ref}" s="9" t="s"><v>{idx}</v></c>'
+            else:
+                # Por seguridad, mantener inline si no está en el mapa
+                return full_match
         
         new_content = re.sub(pattern, replace_inline, content)
         
