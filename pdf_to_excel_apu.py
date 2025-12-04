@@ -703,7 +703,10 @@ class APUConverter:
                     c = ws.cell(row=current_row, column=9, value=cpc_val)
                     c.number_format = fmt_text
                     
-                    ws.cell(row=current_row, column=10, value=equipo.get('np_ep_nd', 'ND'))
+                    # Celda NP/EP/ND con formato texto explícito
+                    c_vae = ws.cell(row=current_row, column=10, value=equipo.get('np_ep_nd', 'ND'))
+                    c_vae.number_format = fmt_text
+                    c_vae.data_type = 's'  # Forzar tipo string
                     
                     c = ws.cell(row=current_row, column=11, value=equipo.get('vae_pct', 0) if equipo.get('vae_pct') is not None else 0)
                     c.number_format = fmt_vae_pct
@@ -730,7 +733,9 @@ class APUConverter:
                 c.number_format = fmt_peso_relativo
                 c = ws.cell(row=current_row, column=9, value='4299217233')
                 c.number_format = fmt_text
-                ws.cell(row=current_row, column=10, value='ND')
+                c_vae = ws.cell(row=current_row, column=10, value='ND')
+                c_vae.number_format = fmt_text
+                c_vae.data_type = 's'
                 c = ws.cell(row=current_row, column=11, value=0.4)
                 c.number_format = fmt_vae_pct
                 c = ws.cell(row=current_row, column=12, value=round(peso_rel * 0.4, 5))
@@ -787,7 +792,9 @@ class APUConverter:
                 c.number_format = fmt_peso_relativo
                 c = ws.cell(row=current_row, column=9, value=mo.get('cpc'))
                 c.number_format = fmt_text
-                ws.cell(row=current_row, column=10, value=mo.get('np_ep_nd', 'EP'))
+                c_vae = ws.cell(row=current_row, column=10, value=mo.get('np_ep_nd', 'EP'))
+                c_vae.number_format = fmt_text
+                c_vae.data_type = 's'
                 c = ws.cell(row=current_row, column=11, value=mo.get('vae_pct', 1))
                 c.number_format = fmt_vae_pct
                 c = ws.cell(row=current_row, column=12, value=mo.get('vae_elemento'))
@@ -839,7 +846,9 @@ class APUConverter:
                 c.number_format = fmt_peso_relativo
                 c = ws.cell(row=current_row, column=9, value=mat.get('cpc'))
                 c.number_format = fmt_text
-                ws.cell(row=current_row, column=10, value=mat.get('np_ep_nd', 'EP'))
+                c_vae = ws.cell(row=current_row, column=10, value=mat.get('np_ep_nd', 'EP'))
+                c_vae.number_format = fmt_text
+                c_vae.data_type = 's'
                 c = ws.cell(row=current_row, column=11, value=mat.get('vae_pct', 1))
                 c.number_format = fmt_vae_pct
                 c = ws.cell(row=current_row, column=12, value=mat.get('vae_elemento'))
@@ -891,7 +900,9 @@ class APUConverter:
                 c.number_format = fmt_peso_relativo
                 c = ws.cell(row=current_row, column=9, value=trans.get('cpc'))
                 c.number_format = fmt_text
-                ws.cell(row=current_row, column=10, value=trans.get('np_ep_nd', 'EP'))
+                c_vae = ws.cell(row=current_row, column=10, value=trans.get('np_ep_nd', 'EP'))
+                c_vae.number_format = fmt_text
+                c_vae.data_type = 's'
                 c = ws.cell(row=current_row, column=11, value=trans.get('vae_pct', 1))
                 c.number_format = fmt_vae_pct
                 c = ws.cell(row=current_row, column=12, value=trans.get('vae_elemento'))
@@ -1115,12 +1126,13 @@ def convert_to_shared_strings(input_path, output_path=None):
         vae_values = {'NP', 'EP', 'ND'}  # Valores que NO se convierten
         
         # Buscar todos los inline strings EN ORDEN
-        pattern = r'<c r="([^"]*)"[^>]*t="inlineStr"[^>]*><is><t>([^<]*)</t></is></c>'
+        # Patrón más flexible para capturar inline strings
+        pattern = r'<c r="([^"]*)"([^>]*)t="inlineStr"([^>]*)><is><t>([^<]*)</t></is></c>'
         
         # Primera pasada: recopilar strings en orden de primera aparición
         for match in re.finditer(pattern, content):
             cell_ref = match.group(1)
-            text = match.group(2)
+            text = match.group(4)
             
             # NO convertir valores NP/EP/ND - deben permanecer inline
             if text in vae_values:
@@ -1133,20 +1145,28 @@ def convert_to_shared_strings(input_path, output_path=None):
         print(f"  Encontrados {len(shared_strings)} strings únicos (excluyendo NP/EP/ND)")
         
         # Reemplazar inline strings con referencias a shared strings
-        # IMPORTANTE: NP/EP/ND permanecen como inline strings
+        # IMPORTANTE: NP/EP/ND permanecen como inline strings SIN MODIFICAR
         def replace_inline(match):
             full_match = match.group(0)
             cell_ref = match.group(1)
-            text = match.group(2)
+            attrs_before = match.group(2)
+            attrs_after = match.group(3)
+            text = match.group(4)
             
-            # Si es un valor VAE (NP/EP/ND), mantener inline
+            # Si es un valor VAE (NP/EP/ND), mantener EXACTAMENTE como está
             if text in vae_values:
                 return full_match
             
             # Para otros valores, convertir a shared string
             if text in string_map:
                 idx = string_map[text]
-                return f'<c r="{cell_ref}" s="9" t="s"><v>{idx}</v></c>'
+                # Preservar atributos de estilo si existen
+                style_match = re.search(r's="(\d+)"', attrs_before + attrs_after)
+                if style_match:
+                    style = style_match.group(1)
+                    return f'<c r="{cell_ref}" s="{style}" t="s"><v>{idx}</v></c>'
+                else:
+                    return f'<c r="{cell_ref}" t="s"><v>{idx}</v></c>'
             else:
                 # Por seguridad, mantener inline si no está en el mapa
                 return full_match
