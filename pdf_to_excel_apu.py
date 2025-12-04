@@ -1120,10 +1120,9 @@ def convert_to_shared_strings(input_path, output_path=None):
             content = f.read()
         
         # Recopilar todos los inline strings EN ORDEN DE APARICIÓN
-        # EXCEPCIÓN: No convertir "NP", "EP", "ND" ya que PUNIS necesita que permanezcan inline
+        # PUNIS REQUIERE que TODOS los strings sean shared strings, incluyendo NP/EP/ND
         shared_strings = []
         string_map = {}  # mapa de string -> índice
-        vae_values = {'NP', 'EP', 'ND'}  # Valores que NO se convierten
         
         # Buscar todos los inline strings EN ORDEN
         # Patrón más flexible para capturar inline strings
@@ -1134,18 +1133,15 @@ def convert_to_shared_strings(input_path, output_path=None):
             cell_ref = match.group(1)
             text = match.group(4)
             
-            # NO convertir valores NP/EP/ND - deben permanecer inline
-            if text in vae_values:
-                continue
-                
+            # Agregar TODOS los strings al mapa (incluyendo NP/EP/ND)
             if text not in string_map:
                 string_map[text] = len(shared_strings)
                 shared_strings.append(text)
         
-        print(f"  Encontrados {len(shared_strings)} strings únicos (excluyendo NP/EP/ND)")
+        print(f"  Encontrados {len(shared_strings)} strings únicos")
         
         # Reemplazar inline strings con referencias a shared strings
-        # IMPORTANTE: NP/EP/ND permanecen como inline strings SIN MODIFICAR
+        # TODOS los strings se convierten a shared strings (PUNIS lo requiere)
         def replace_inline(match):
             full_match = match.group(0)
             cell_ref = match.group(1)
@@ -1153,11 +1149,7 @@ def convert_to_shared_strings(input_path, output_path=None):
             attrs_after = match.group(3)
             text = match.group(4)
             
-            # Si es un valor VAE (NP/EP/ND), mantener EXACTAMENTE como está
-            if text in vae_values:
-                return full_match
-            
-            # Para otros valores, convertir a shared string
+            # Convertir a shared string
             if text in string_map:
                 idx = string_map[text]
                 # Preservar atributos de estilo si existen
