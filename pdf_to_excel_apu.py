@@ -1208,8 +1208,8 @@ def convert_pdf_to_excel(pdf_path, output_path=None):
     converter.extract_all_rubros()
     converter.create_excel(output_path)
     
-    # Post-procesar para asegurar compatibilidad con PUNIS (Shared Strings)
-    convert_to_shared_strings(output_path)
+    # NOTA: No usamos convert_to_shared_strings porque desincroniza los índices
+    # openpyxl ya genera shared strings automáticamente cuando es necesario
     
     return output_path
 
