@@ -12,6 +12,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.packaging.core import DocumentProperties
+from openpyxl.worksheet.datavalidation import DataValidation
 import re
 import os
 import sys
@@ -1029,6 +1030,23 @@ class APUConverter:
         wb.properties.subject = 'Precios Unitarios'
         wb.properties.creator = 'PUNIS'
         wb.properties.category = self.header_info.get('profesional', '')
+        
+        # === AGREGAR VALIDACIÓN DE DATOS PARA COLUMNA J (NP/EP/ND) ===
+        # Crear la validación de datos con la lista de opciones
+        dv = DataValidation(type="list", formula1='"NP,EP,ND"', allow_blank=False)
+        dv.error = 'El valor debe ser NP, EP o ND'
+        dv.errorTitle = 'Entrada inválida'
+        dv.prompt = 'Seleccione NP, EP o ND'
+        dv.promptTitle = 'Tipo de origen'
+        
+        # Agregar la validación a la hoja
+        ws.add_data_validation(dv)
+        
+        # Aplicar la validación a todas las celdas de columna J que contengan datos
+        for row in range(1, ws.max_row + 1):
+            cell_j = ws.cell(row=row, column=10)  # Columna J
+            if cell_j.value in ['NP', 'EP', 'ND', 'NP / EP /\nND']:
+                dv.add(cell_j)
         
         # === APLICAR FORMATO DE NÚMEROS A TODAS LAS CELDAS NUMÉRICAS ===
         # NOTA: Los formatos de porcentaje para columnas 8, 11, 12 ya se aplican
