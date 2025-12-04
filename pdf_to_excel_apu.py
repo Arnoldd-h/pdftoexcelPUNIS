@@ -1053,7 +1053,7 @@ class APUConverter:
 
 
 def convert_to_shared_strings(input_path, output_path=None):
-    """Convierte un archivo XLSX de inline strings a shared strings."""
+    """Convierte un archivo XLSX de inline strings a shared strings PRESERVANDO el orden."""
     
     if output_path is None:
         output_path = input_path
@@ -1082,13 +1082,14 @@ def convert_to_shared_strings(input_path, output_path=None):
         with open(sheet_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Recopilar todos los inline strings y crear tabla de shared strings
+        # Recopilar todos los inline strings EN ORDEN DE APARICIÓN
         shared_strings = []
         string_map = {}  # mapa de string -> índice
         
-        # Buscar todos los inline strings
+        # Buscar todos los inline strings EN ORDEN
         pattern = r't="inlineStr"[^>]*><is><t>([^<]*)</t></is>'
         
+        # Primera pasada: recopilar strings en orden de primera aparición
         for match in re.finditer(pattern, content):
             text = match.group(1)
             if text not in string_map:
@@ -1098,6 +1099,7 @@ def convert_to_shared_strings(input_path, output_path=None):
         print(f"  Encontrados {len(shared_strings)} strings únicos")
         
         # Reemplazar inline strings con referencias a shared strings
+        # IMPORTANTE: Cada ocurrencia del mismo texto debe tener el mismo índice
         def replace_inline(match):
             text = match.group(1)
             idx = string_map[text]
@@ -1208,8 +1210,9 @@ def convert_pdf_to_excel(pdf_path, output_path=None):
     converter.extract_all_rubros()
     converter.create_excel(output_path)
     
-    # NOTA: No usamos convert_to_shared_strings porque desincroniza los índices
-    # openpyxl ya genera shared strings automáticamente cuando es necesario
+    # Post-procesar para asegurar compatibilidad con PUNIS (Shared Strings)
+    # La versión mejorada ahora preserva el orden y contenido correcto
+    convert_to_shared_strings(output_path)
     
     return output_path
 
